@@ -327,6 +327,8 @@ int rc_set_motor_brake_all();
 int rc_get_encoder_pos(int ch);
 int rc_set_encoder_pos(int ch, int value);
 
+void rc_rcin_sbus_update(void);
+
 /******************************************************************************
 * ANALOG VOLTAGE SIGNALS
 *

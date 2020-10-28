@@ -1,3 +1,84 @@
+#ifdef USE_RCINPRU0
+
+/*
+ * This is rcinpru0.c from Ardupilot.
+ *
+ */
+
+#define PRU0
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <strings.h>
+#include <stdint.h>
+
+#include "linux_types.h"
+#include "pru_defs.h"
+#include "prucomm.h"
+
+#include <pru_cfg.h>
+#include <pru_ctrl.h>
+#include "resource_table_pru1.h"
+
+
+void add_to_ring_buffer(uint8_t v, uint16_t deltat)
+{
+    RBUFF->buffer[RBUFF->ring_tail].pin_value = v;
+    RBUFF->buffer[RBUFF->ring_tail].delta_t = deltat;
+    RBUFF->ring_tail = (RBUFF->ring_tail + 1) % NUM_RING_ENTRIES;
+}
+
+static inline u32 read_PIEP_COUNT(void)
+{
+    return PIEP_COUNT;
+}
+
+uint32_t read_pin(void){
+    return ((__R31&(1<<15)) != 0);
+}
+
+void main()
+{
+    uint32_t last_time_us = 0;
+    uint8_t last_pin_value = 0;
+
+    /*PRU Initialisation*/
+    PRUCFG_SYSCFG &= ~SYSCFG_STANDBY_INIT;
+    PRUCFG_SYSCFG = (PRUCFG_SYSCFG &
+            ~(SYSCFG_IDLE_MODE_M | SYSCFG_STANDBY_MODE_M)) |
+            SYSCFG_IDLE_MODE_NO | SYSCFG_STANDBY_MODE_NO;
+
+    /* our PRU wins arbitration */
+    PRUCFG_SPP |=  SPP_PRU1_PAD_HP_EN;
+
+    /* configure timer */
+    PIEP_GLOBAL_CFG = GLOBAL_CFG_DEFAULT_INC(1) |
+              GLOBAL_CFG_CMP_INC(1);
+    PIEP_CMP_STATUS = CMD_STATUS_CMP_HIT(1); /* clear the interrupt */
+        PIEP_CMP_CMP1   = 0x0;
+    PIEP_CMP_CFG |= CMP_CFG_CMP_EN(1);
+        PIEP_GLOBAL_CFG |= GLOBAL_CFG_CNT_ENABLE;
+
+    RBUFF->ring_tail = 20;
+    while (1) {
+        uint32_t v;
+        while ((v=read_pin()) == last_pin_value) {
+          // noop
+        }
+        uint32_t now = read_PIEP_COUNT()/200;
+        uint32_t delta_time_us = now - last_time_us;
+        last_time_us = now;
+
+        add_to_ring_buffer(last_pin_value, delta_time_us);
+        last_pin_value = v;
+    }
+}
+
+
+#else /* USE_RCINPRU0 */
+
+
 /*
  * Source Modified by Zubeen Tolani < ZeekHuge - zeekhuge@gmail.com >
  * Based on the examples distributed by TI
@@ -46,13 +127,15 @@ extern void start(void);
 
 void main(void)
 {
-	/* Clear SYSCFG[STANDBY_INIT] to enable OCP master port */
-	CT_CFG.SYSCFG_bit.STANDBY_INIT = 0;
-	
-	// Access PRU Shared RAM using Constant Table                    */
-	// C28 defaults to 0x00000000, we need to set bits 23:8 to 0x0100 in order to have it point to 0x00010000	 */
-	PRU0_CTRL.CTPPR0_bit.C28_BLK_POINTER = 0x0100;
+    /* Clear SYSCFG[STANDBY_INIT] to enable OCP master port */
+    CT_CFG.SYSCFG_bit.STANDBY_INIT = 0;
 
-	start();
+    /* Access PRU Shared RAM using Constant Table */
+    /* C28 defaults to 0x00000000, we need to set bits 23:8 to 0x0100 in order to have it point to 0x00010000 */
+    PRU0_CTRL.CTPPR0_bit.C28_BLK_POINTER = 0x0100;
+
+    start();
 }
 
+
+#endif /* USE_RCINPRU0 */

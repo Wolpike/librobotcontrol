@@ -28,6 +28,9 @@
 
 static unsigned int *prusharedMem_32int_ptr;
 
+#ifdef USE_RCINPRU0
+static void rc_rcin_init(uint8_t *pru_mem_start);
+#endif
 
 /*******************************************************************************
 * int initialize_pru()
@@ -85,6 +88,10 @@ int initialize_pru(){
 
 	// set global shared memory pointer
 	prusharedMem_32int_ptr = pru + PRU_SHAREDMEM/4;	// Points to start of shared memory
+
+#ifdef USE_RCINPRU0
+        rc_rcin_init((uint8_t *)pru);
+#endif
 
 	// zero out the 8 servo channels and encoder channel
 	#ifdef DEBUG
@@ -152,6 +159,21 @@ int restart_pru(){
 }
 
 
+#ifdef USE_RCINPRU0
+
+int get_pru_encoder_pos()
+{
+	return -1;
+}
+
+int set_pru_encoder_pos(int val)
+{
+	(void)val;
+	return -1;
+}
+
+#else
+
 /*******************************************************************************
 * int get_pru_encoder_pos();
 * 
@@ -173,6 +195,7 @@ int set_pru_encoder_pos(int val){
 	return 0;
 }
 
+#endif
 
 
 /*******************************************************************************
@@ -328,3 +351,81 @@ int rc_send_oneshot_pulse_normalized_all(float input){
 	}
 	return ret;
 }
+
+/******************************************************************************/
+
+#ifdef USE_RCINPRU0
+
+#define RCIN_RBUF_OFFSET    0x12000
+#define RCIN_RBUF_NENTRIES  300
+
+typedef struct rcin_ring_buffer_t
+{
+    uint16_t ring_head; /* Owned by ARM CPU */
+    uint16_t ring_tail; /* Owned by PRU */
+    struct
+    {
+        uint16_t  pin_value;
+        uint16_t  delta_t;
+    } buffer[RCIN_RBUF_NENTRIES];
+} rcin_ring_buffer_t;
+
+typedef struct rcin_sbus_decoder_t
+{
+    volatile rcin_ring_buffer_t  *rbuf;
+    uint16_t                      s0_time;
+} rcin_sbus_decoder_t;
+
+
+static rcin_sbus_decoder_t g_sbus_dec =
+{
+    .rbuf     = NULL,
+    .s0_time  = 0,
+};
+
+
+static void rc_rcin_init(uint8_t *pru_mem_start)
+{
+    g_sbus_dec.rbuf = (volatile rcin_ring_buffer_t *)((uint8_t *)pru_mem_start + RCIN_RBUF_OFFSET);
+    g_sbus_dec.rbuf->ring_head = 0;
+
+    //printf("%s %p %p\n", __func__, pru_mem_start, g_sbus_dec.rbuf);
+}
+
+static void rc_rcin_sbus_process_pulse(rcin_sbus_decoder_t *dec, uint16_t width_s0, uint16_t width_s1)
+{
+    printf("%u %u: %u %u\n", dec->rbuf->ring_head, dec->rbuf->ring_tail, width_s0, width_s1);
+    /* TODO */
+}
+
+void rc_rcin_sbus_update(void)
+{
+    volatile rcin_ring_buffer_t *rbuf = g_sbus_dec.rbuf;
+
+    //printf("%s %u %u\n", __func__, rbuf->ring_head, rbuf->ring_tail);
+
+    while (rbuf->ring_head != rbuf->ring_tail)
+    {
+        if (rbuf->ring_tail >= RCIN_RBUF_NENTRIES)
+        {
+            /* Invalid ring_tail from PRU - ignore RC input */
+            return;
+        }
+
+        if (rbuf->buffer[rbuf->ring_head].pin_value == 1)
+        {
+            /* Remember the time we spent in the low state */
+            g_sbus_dec.s0_time = rbuf->buffer[rbuf->ring_head].delta_t;
+        }
+        else
+        {
+            /* The pulse value is the sum of the time spent in the low and high states */
+            rc_rcin_sbus_process_pulse(&g_sbus_dec, g_sbus_dec.s0_time, rbuf->buffer[rbuf->ring_head].delta_t);
+        }
+
+        /* Move to the next ring buffer entry */
+        rbuf->ring_head = (rbuf->ring_head + 1) % RCIN_RBUF_NENTRIES;
+    }
+}
+
+#endif /* USE_RCINPRU0 */

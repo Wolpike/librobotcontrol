@@ -9,7 +9,7 @@ CWARNINGS	:= -Wall -Wextra
 ARCFLAGS	:= -mfpu=neon -mfloat-abi=hard -march=armv7-a -mtune=cortex-a8 
 # enable O3 optimization and vectorized math
 FFLAGS		:= -O3 -ffast-math -ftree-vectorize
-CFLAGS		:= -c -fPIC
+CFLAGS		:= -c -fPIC -DUSE_RCINPRU0
 LFLAGS		:= -lm -lrt -lpthread -shared -Wl,-soname,$(TARGET)
 
 SOURCES		:= $(shell find ./ -name '*.c')

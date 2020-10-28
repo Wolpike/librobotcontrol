@@ -8,6 +8,29 @@
 #include "../../libraries/rc_usefulincludes.h"
 #include "../../libraries/roboticscape.h"
 
+
+#ifdef USE_RCINPRU0
+
+
+int main(){
+	// initialize hardware first
+	if(rc_initialize()){
+		fprintf(stderr,"ERROR: failed to run rc_initialize(), are you root?\n");
+		return -1;
+	}
+
+	while(rc_get_state() != EXITING){
+		rc_rcin_sbus_update();
+	}
+
+	rc_cleanup();
+	return 0;
+}
+
+
+#else /* USE_RCINPRU0 */
+
+
 int main(){
 	int i;
 
@@ -37,3 +60,5 @@ int main(){
 	return 0;
 }
 
+
+#endif /* USE_RCINPRU0 */

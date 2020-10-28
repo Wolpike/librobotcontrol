@@ -2,7 +2,7 @@
 
 CC		:= gcc
 LINKER		:= gcc -o
-CFLAGS		:= -c -Wall -O2
+CFLAGS		:= -c -Wall -O2 -DUSE_RCINPRU0
 LFLAGS		:= -L ../../libraries -lm -lrt -lpthread -lroboticscape
 
 SOURCES		:= $(wildcard *.c)
