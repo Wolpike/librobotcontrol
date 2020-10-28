@@ -327,7 +327,14 @@ int rc_set_motor_brake_all();
 int rc_get_encoder_pos(int ch);
 int rc_set_encoder_pos(int ch, int value);
 
+void rc_rcin_init(uint8_t *pru_mem_start);
 void rc_rcin_sbus_update(void);
+
+void rc_sbus_decoder_init(void);
+void rc_sbus_decoder_process_pulse(uint32_t width_s0, uint32_t width_s1);
+int rc_sbus_decoder_get_num_channels(void);
+int rc_sbus_decoder_get_channel_pwm(int chan);
+
 
 /******************************************************************************
 * ANALOG VOLTAGE SIGNALS
